@@ -3,22 +3,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>파일 자료실</title>
-<meta name="library-release" content="3">
-<link rel="stylesheet" href="./library.css?v=3">
-<header><strong>파일 자료실</strong><button id="connect">편집 연결</button></header>
+<title>엑셀 표 공유</title>
+<meta name="library-release" content="4">
+<link rel="stylesheet" href="./library.css?v=4">
+<header><strong>엑셀 표 공유</strong><button id="connect">편집 연결</button></header>
 <main>
+  <p role="status" id="status">불러오는 중…</p>
+  <section id="workbook" hidden aria-labelledby="workbookName">
+    <button id="backToList">← 파일 목록</button>
+    <h1 id="workbookName"></h1>
+    <div class="toolbar">
+      <button id="shareWorkbook" class="primary">게시하고 공유 링크 만들기</button>
+      <button id="copyWorkbookLink" class="primary">공유 링크 복사</button>
+      <button id="downloadWorkbook">원본 내려받기</button>
+    </div>
+    <p id="workbookHint" class="hint" hidden>공개 테스트 페이지에 게시하면 링크를 받은 사람이 표와 원본 파일을 볼 수 있어요.</p>
+    <div id="sheetButtons" class="toolbar sheets" aria-label="시트 선택"></div>
+    <div id="sheetGrid" class="sheet-grid" tabindex="0" role="region" aria-label="엑셀 표"></div>
+    <div id="sheetNavigation" class="toolbar sheet-navigation" hidden>
+      <button id="previousRows">이전 행</button><button id="nextRows">다음 행</button>
+      <button id="previousColumns">이전 열</button><button id="nextColumns">다음 열</button>
+      <span id="sheetPosition"></span>
+    </div>
+  </section>
+  <section id="library">
+  <h1>엑셀 표를 링크로 공유</h1>
+  <button id="chooseWorkbook" class="primary">엑셀 파일 선택</button>
+  <input hidden id="localWorkbook" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
   <nav id="crumbs" aria-label="현재 위치"></nav>
-  <h1 id="title">전체 자료</h1>
+  <h2 id="title">전체 자료</h2>
   <section class="toolbar" aria-label="자료 관리">
     <input id="search" type="search" placeholder="전체 자료 검색" aria-label="전체 자료 검색">
     <button id="refresh">새로고침</button><button id="folder">하위 탭 추가</button>
     <button id="upload" class="primary">파일 올리기</button><input hidden type="file" id="files" multiple>
   </section>
-  <p role="status" id="status">자료를 불러오는 중…</p>
   <section id="list" aria-label="탭과 파일"></section>
   <button hidden id="migrate">기존 자료 형식 업데이트</button>
   <p class="hint">파일당 최대 25 MiB · 나스카 보호 문서는 내려받은 뒤 권한이 있는 PC에서 여세요.</p>
+  </section>
 </main>
 <dialog id="access"><form method="dialog">
   <h2>GitHub 편집 연결</h2>
@@ -30,5 +52,5 @@
 <dialog id="moveDialog"><form method="dialog"><h2>이동할 탭</h2><select id="dest" aria-label="대상 탭"></select>
   <footer><button value="cancel">취소</button><button value="ok" class="primary">이동</button></footer>
 </form></dialog>
-<script type="module" src="./library.js?v=3"></script>
+<script type="module" src="./library.js?v=4"></script>
 </html>

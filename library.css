@@ -17,3 +17,15 @@ small { display: block; color: #50665c; margin-top: 4px; }
 dialog { border: 1px solid #bdcbc3; border-radius: 12px; width: min(440px,92vw); padding: 24px; color: inherit; }
 dialog::backdrop { background: #11271e66; } dialog input,select { display: block; width: 100%; margin-top: 8px; }
 footer { justify-content: flex-end; margin-top: 20px; } [inert] { opacity: .65; }
+[hidden] { display: none !important; }
+#library nav { margin-top: 28px; }
+.sheets, .sheet-navigation { margin: 16px 0; }
+.sheets button[aria-pressed="true"] { background: #193e35; color: white; }
+.sheet-grid { max-height: 65vh; overflow: auto; }
+.sheet-grid table { border-collapse: separate; border-spacing: 0; background: white; color: #192c23; }
+.sheet-grid th, .sheet-grid td { padding: 6px 10px; min-width: 36px; border-right: 1px solid #d9e2dc; border-bottom: 1px solid #d9e2dc; }
+.sheet-grid td { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 100px; max-width: 320px; }
+.sheet-grid th { background: #e4efe9; font-weight: normal; }
+.sheet-grid thead th { position: sticky; top: 0; z-index: 1; }
+.sheet-grid tbody th { position: sticky; left: 0; }
+#workbookName { overflow-wrap: anywhere; }

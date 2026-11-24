@@ -1,9 +1,11 @@
 import {repository as repo, githubUrl, apiUrl, dataBranch as branch, publicRawBase} from './config.js?v=3';
 import {readCatalog, writeCatalog} from './catalog.mjs?v=3';
+import {isWorkbook, readWorkbook, showWorkbook} from './workbook.js?v=4';
 const limit = 25 * 1024 * 1024;
 const $ = id => document.getElementById(id);
 let token = '', head = '', tree = '', current = '', entries = [], busy = false;
 let metadata = {}, legacy = false;
+let activeWorkbook;
 
 async function api(path, method = 'GET', body) {
   const headers = {Accept: 'application/vnd.github+json'};
@@ -148,7 +150,12 @@ function render() {
   for (const x of items) {
     const row = element('article',''), item = element('div',''), actions = element('div','');
     row.className = 'row'; item.className = 'item'; actions.className = 'actions';
-    item.append(x.folder ? button(x.name, () => openTab(x.id)) : element('strong', x.name));
+    if (x.folder) item.append(button(x.name, () => openTab(x.id)));
+    else if (x.workbook ?? isWorkbook(x.name)) {
+      const link = element('a', x.name);
+      link.href = '#excel=' + encodeURIComponent(x.id);
+      item.append(link);
+    } else item.append(element('strong', x.name));
     const detail = x.folder ? '하위 탭' : (x.size < 1024 ? x.size + ' B' : (x.size / 1024).toLocaleString('ko', {maximumFractionDigits: 1}) + ' KiB');
     item.append(element('small', detail + (query ? ' · 전체 자료 / ' + trail(x.parent).map(n => n.name).join(' / ') : '')));
     if (!x.folder) actions.append(button('내려받기', () => run(() => download(x))));
@@ -204,18 +211,21 @@ async function upload(files) {
   for (const file of files) {
     if (file.size > limit) throw new Error('25 MiB를 초과한 파일 · ' + file.name);
     validate(file.name, current, next);
-    next.push({id: crypto.randomUUID(), folder: false, name: file.name, parent: current, size: file.size});
+    const record = {id: crypto.randomUUID(), folder: false, name: file.name, parent: current, size: file.size};
+    if (isWorkbook(file.name)) record.workbook = true;
+    next.push(record);
   }
   for (const [i,file] of files.entries()) {
     $('status').textContent = (i+1) + '/' + files.length + ' 업로드 중 · ' + file.name;
     const blob = await api('/git/blobs', 'POST', {encoding: 'base64', content: await base64(file)});
     changes.push({path: 'files/' + next[entries.length + i].id, mode: '100644', type: 'blob', sha: blob.sha});
   }
+  const added = next.slice(entries.length);
   await save(next, changes, 'Upload files');
   $('search').value = ''; render();
-  return files.length + '개 파일을 올렸습니다.';
+  return added;
 }
-async function download(x) {
+async function fetchFile(x) {
   const headers = {Accept: 'application/vnd.github.raw+json'};
   if (token) headers.Authorization = 'Bearer ' + token;
   const path = '/files/' + encodeURIComponent(x.id);
@@ -225,12 +235,82 @@ async function download(x) {
   if (!response.ok) throw new Error('다운로드 실패 · HTTP ' + response.status);
   const blob = await response.blob();
   if (blob.size !== x.size) throw new Error('받은 파일의 크기가 일치하지 않습니다.');
+  return blob;
+}
+async function download(x) {
+  const blob = await fetchFile(x);
   const url = URL.createObjectURL(blob);
   const a = element('a',''); a.href = url; a.download = x.name;
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   return '다운로드를 시작했습니다 · ' + x.name;
 }
+function openWorkbook({file, record, parsed}) {
+  activeWorkbook = {file, record, parsed};
+  $('library').hidden = true;
+  $('workbook').hidden = false;
+  $('workbookName').textContent = (record || file).name;
+  $('shareWorkbook').hidden = Boolean(record);
+  $('copyWorkbookLink').hidden = !record;
+  $('downloadWorkbook').hidden = !record;
+  $('workbookHint').hidden = Boolean(record) || !publicRawBase;
+  showWorkbook(parsed);
+}
+function showList() {
+  activeWorkbook = undefined;
+  $('workbook').hidden = true;
+  $('library').hidden = false;
+}
+async function openFromLink() {
+  const id = new URLSearchParams(location.hash.slice(1)).get('excel');
+  showList();
+  if (!id) return;
+  const record = entries.find(x => !x.folder && x.id === id);
+  if (!record) throw new Error('공유된 엑셀 파일을 찾을 수 없습니다.');
+  try {
+    const parsed = await readWorkbook(await fetchFile(record));
+    openWorkbook({record, parsed});
+  } catch (error) {
+    return error.message + ' 파일 목록에서 원본을 내려받을 수 있어요.';
+  }
+}
+function shareAddress(id) {
+  const url = new URL(location.href);
+  url.search = '';
+  url.hash = 'excel=' + encodeURIComponent(id);
+  return url.href;
+}
+$('chooseWorkbook').onclick = () => $('localWorkbook').click();
+$('localWorkbook').onchange = () => {
+  const file = $('localWorkbook').files[0];
+  $('localWorkbook').value = '';
+  if (file) run(async () => {
+    if (!isWorkbook(file.name)) throw new Error('엑셀 파일을 선택해 주세요.');
+    if (file.size > limit) throw new Error('파일당 최대 25 MiB까지 열 수 있습니다.');
+    openWorkbook({file, parsed: await readWorkbook(file)});
+  });
+};
+$('shareWorkbook').onclick = () => edit(async () => {
+  const {file, parsed} = activeWorkbook;
+  const [record] = await upload([file]);
+  history.pushState(null, '', shareAddress(record.id));
+  openWorkbook({record, parsed});
+  return '게시했습니다. 공유 링크 복사를 눌러 주소를 전달하세요.';
+});
+$('copyWorkbookLink').onclick = () => {
+  const url = shareAddress(activeWorkbook.record.id);
+  navigator.clipboard.writeText(url).then(
+    () => { $('status').textContent = '공유 링크를 복사했습니다.'; },
+    () => prompt('공유 링크를 복사하세요.', url)
+  );
+};
+$('downloadWorkbook').onclick = () => run(() => download(activeWorkbook.record));
+$('backToList').onclick = () => {
+  if (location.hash) history.pushState(null, '', location.pathname + location.search);
+  showList();
+  $('status').textContent = '';
+};
+window.addEventListener('hashchange', () => run(openFromLink));
 $('cancel').onclick = () => $('access').close('cancel');
 $('connect').onclick = () => run(async () => {
   if (token) { token = ''; $('connect').textContent = '편집 연결'; return '연결을 해제했습니다.'; }
@@ -244,7 +324,21 @@ $('upload').onclick = () => $('files').click();
 $('files').onchange = () => {
   const files = Array.from($('files').files);
   $('files').value = '';
-  if (files.length) edit(() => upload(files));
+  if (files.length) edit(async () => {
+    const added = await upload(files);
+    const workbookIndex = added.findIndex(x => x.workbook);
+    if (workbookIndex >= 0) {
+      const record = added[workbookIndex];
+      try {
+        const parsed = await readWorkbook(files[workbookIndex]);
+        history.pushState(null, '', shareAddress(record.id));
+        openWorkbook({record, parsed});
+      } catch (error) {
+        return added.length + '개 파일을 올렸습니다. ' + error.message;
+      }
+    }
+    return added.length + '개 파일을 올렸습니다.';
+  });
 };
 $('repoName').textContent = repo;
 $('tokenLink').href = githubUrl + '/settings/personal-access-tokens/new';
@@ -266,6 +360,10 @@ $('refresh').onclick = () => run(async () => {
     return;
   }
   await load();
+  if (location.hash) return openFromLink();
 });
 $('search').oninput = render;
-run(load);
+run(async () => {
+  await load();
+  return openFromLink();
+});
