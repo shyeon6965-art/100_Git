@@ -44,10 +44,15 @@ nav button[aria-current]{background:#fff;font-weight:700;position:relative;top:1
 .table-scroll .frozen-column-edge::after{border-right:2px solid #1965aa}
 .table-scroll .search-match{box-shadow:inset 0 0 0 2px #d09817}
 .table-scroll .active-match{box-shadow:inset 0 0 0 3px #1965aa}
-@media print{.sheet-toolbar,#standalone-tools{display:none}}
+.save-progress{position:fixed;right:16px;bottom:16px;z-index:10;display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid #87add6;border-radius:8px;background:#f0f6ff;color:#174c80;box-shadow:0 2px 10px #26303d26;font-weight:600}
+.save-progress::before{content:"";width:14px;height:14px;border:2px solid #87add6;border-top-color:#174c80;border-radius:50%;animation:save-spin .8s linear infinite}
+@keyframes save-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.save-progress::before{animation:none}}
+@media print{.sheet-toolbar,#standalone-tools,.save-progress{display:none}}
 </style></head><body><header><b>엑셀 표 공유</b></header>
 <div id="tabs"></div><main id="tables">
 <p id="save-status" class="note" role="status" hidden></p>
+<div id="save-progress" class="save-progress" role="status" hidden></div>
 <div id="standalone-tools"><button class="save" type="button" data-save="tab" hidden>현재 탭 시트 저장</button></div>
 <div id="search-tools" class="table-tools" role="search" hidden>
 <label for="table-search">글자 검색</label>
