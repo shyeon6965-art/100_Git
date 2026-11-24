@@ -1,14 +1,15 @@
-const repo = 'shyeon6965-art/100_Git';
-const branch = 'library-data';
+import {repository as repo, githubUrl, apiUrl, dataBranch as branch} from './config.js?v=2';
+import {readCatalog, writeCatalog} from './catalog.mjs?v=2';
 const limit = 25 * 1024 * 1024;
 const $ = id => document.getElementById(id);
 let token = '', head = '', tree = '', current = '', entries = [], busy = false;
+let metadata = {}, legacy = false;
 
 async function api(path, method = 'GET', body) {
   const headers = {Accept: 'application/vnd.github+json'};
   if (token) headers.Authorization = 'Bearer ' + token;
   if (body) headers['Content-Type'] = 'application/json';
-  const res = await fetch('https://api.github.com/repos/' + repo + path, {
+  const res = await fetch(apiUrl + '/repos/' + repo + path, {
     method, headers, cache: 'no-store', body: body && JSON.stringify(body)
   });
   const data = await res.json();
@@ -21,21 +22,21 @@ async function load() {
   const commit = await api('/git/commits/' + ref.object.sha);
   const root = await api('/git/trees/' + commit.tree.sha);
   const manifest = root.tree.find(x => x.path === 'library.json');
-  let records = [];
-  if (manifest) {
-    const blob = await api('/git/blobs/' + manifest.sha);
-    const bytes = Uint8Array.from(atob(blob.content), c => c.charCodeAt(0));
-    records = JSON.parse(new TextDecoder().decode(bytes));
-  }
+  if (!manifest) throw new Error('자료 브랜치에서 library.json을 찾을 수 없습니다.');
+  const blob = await api('/git/blobs/' + manifest.sha);
+  const bytes = Uint8Array.from(atob(blob.content), c => c.charCodeAt(0));
+  const catalog = readCatalog(JSON.parse(new TextDecoder().decode(bytes)));
   head = commit.sha;
   tree = commit.tree.sha;
-  entries = records;
+  entries = catalog.entries;
+  metadata = catalog.metadata;
+  legacy = catalog.legacy;
   if (!entries.some(x => x.id === current && x.folder)) current = '';
   render();
 }
 
 async function save(next, changes, message) {
-  changes.push({path: 'library.json', mode: '100644', type: 'blob', content: JSON.stringify(next)});
+  changes.push({path: 'library.json', mode: '100644', type: 'blob', content: writeCatalog(metadata, next)});
   const updated = await api('/git/trees', 'POST', {base_tree: tree, tree: changes});
   const commit = await api('/git/commits', 'POST', {message, tree: updated.sha, parents: [head]});
   try {
@@ -47,6 +48,7 @@ async function save(next, changes, message) {
   head = commit.sha;
   tree = updated.sha;
   entries = next;
+  legacy = false;
   render();
 }
 
@@ -119,6 +121,7 @@ function openTab(id) {
   render();
 }
 function render() {
+  $('migrate').hidden = !legacy;
   const path = trail(current);
   $('title').textContent = path.at(-1)?.name || '전체 자료';
   $('crumbs').replaceChildren(button('전체 자료', () => openTab('')));
@@ -200,7 +203,9 @@ async function upload(files) {
   return files.length + '개 파일을 올렸습니다.';
 }
 async function download(x) {
-  const response = await fetch('https://raw.githubusercontent.com/' + repo + '/' + head + '/files/' + x.id);
+  const headers = {Accept: 'application/vnd.github.raw+json'};
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const response = await fetch(apiUrl + '/repos/' + repo + '/contents/files/' + encodeURIComponent(x.id) + '?ref=' + head, {headers});
   if (!response.ok) throw new Error('다운로드 실패 · HTTP ' + response.status);
   const blob = await response.blob();
   if (blob.size !== x.size) throw new Error('받은 파일의 크기가 일치하지 않습니다.');
@@ -213,7 +218,10 @@ async function download(x) {
 $('cancel').onclick = () => $('access').close('cancel');
 $('connect').onclick = () => run(async () => {
   if (token) { token = ''; $('connect').textContent = '편집 연결'; return '연결을 해제했습니다.'; }
-  if (await authorize()) return '편집 연결을 완료했습니다.';
+  if (await authorize()) {
+    await load();
+    return '편집 연결을 완료했습니다.';
+  }
 });
 $('folder').onclick = () => edit(addTab);
 $('upload').onclick = () => $('files').click();
@@ -222,6 +230,26 @@ $('files').onchange = () => {
   $('files').value = '';
   if (files.length) edit(() => upload(files));
 };
-$('refresh').onclick = () => run(load);
+$('repoName').textContent = repo;
+$('tokenLink').href = githubUrl + '/settings/personal-access-tokens/new';
+$('migrate').onclick = () => edit(async () => {
+  await load();
+  if (!legacy) return '이미 최신 자료 형식입니다.';
+  await save(entries, [], 'Upgrade library catalog to v2');
+  return '기존 탭과 파일 목록을 최신 형식으로 업데이트했습니다.';
+});
+$('refresh').onclick = () => run(async () => {
+  const url = new URL(location.href);
+  url.searchParams.set('releaseCheck', Date.now());
+  const response = await fetch(url, {cache: 'no-store'});
+  if (!response.ok) throw new Error('페이지 버전을 확인할 수 없습니다.');
+  const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+  const release = doc => doc.querySelector('meta[name="library-release"]')?.content;
+  if (release(html) && release(html) !== release(document)) {
+    location.replace(url);
+    return;
+  }
+  await load();
+});
 $('search').oninput = render;
 run(load);
