@@ -47,7 +47,8 @@ function showCatalog(catalog, commitSha, treeSha) {
 }
 
 async function save(next, changes, message) {
-  changes.push({path: 'library.json', mode: '100644', type: 'blob', content: writeCatalog(metadata, next)});
+  const nextMetadata = {...metadata, revisionTime: Math.max(Date.now(), (metadata.revisionTime || 0) + 1)};
+  changes.push({path: 'library.json', mode: '100644', type: 'blob', content: writeCatalog(nextMetadata, next)});
   const updated = await api('/git/trees', 'POST', {base_tree: tree, tree: changes});
   const commit = await api('/git/commits', 'POST', {message, tree: updated.sha, parents: [head]});
   try {
@@ -59,6 +60,7 @@ async function save(next, changes, message) {
   head = commit.sha;
   tree = updated.sha;
   entries = next;
+  metadata = nextMetadata;
   legacy = false;
   render();
 }
@@ -155,7 +157,7 @@ function render() {
     if (x.folder) item.append(button(x.name, () => openTab(x.id)));
     else if (x.workbook ?? isWorkbook(x.name)) {
       const link = element('a', x.name);
-      link.href = '#excel=' + encodeURIComponent(x.id);
+      link.href = shareAddress(x.id);
       item.append(link);
     } else item.append(element('strong', x.name));
     const detail = x.folder ? '하위 탭' : (x.size < 1024 ? x.size + ' B' : (x.size / 1024).toLocaleString('ko', {maximumFractionDigits: 1}) + ' KiB');
@@ -229,28 +231,28 @@ async function upload(files) {
   $('search').value = ''; render();
   return added;
 }
-async function fetchFile(x) {
+async function fetchFile(x, revision = head) {
   const headers = {Accept: 'application/vnd.github.raw+json'};
   if (token) headers.Authorization = 'Bearer ' + token;
   const path = '/files/' + encodeURIComponent(x.id);
   const response = !token && publicRawBase && githubUrl === 'https://github.com'
-    ? await fetch(publicRawBase + '/' + repo + '/' + (head || branch) + path)
-    : await fetch(apiUrl + '/repos/' + repo + '/contents' + path + '?ref=' + (head || branch), {headers});
+    ? await fetch(publicRawBase + '/' + repo + '/' + (revision || branch) + path)
+    : await fetch(apiUrl + '/repos/' + repo + '/contents' + path + '?ref=' + (revision || branch), {headers});
   if (!response.ok) throw new Error('다운로드 실패 · HTTP ' + response.status);
   const blob = await response.blob();
   if (blob.size !== x.size) throw new Error('받은 파일의 크기가 일치하지 않습니다.');
   return blob;
 }
-async function download(x) {
-  const blob = await fetchFile(x);
+async function download(x, revision) {
+  const blob = await fetchFile(x, revision);
   const url = URL.createObjectURL(blob);
   const a = element('a',''); a.href = url; a.download = x.name;
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   return '다운로드를 시작했습니다 · ' + x.name;
 }
-function openWorkbook({file, record, parsed}) {
-  activeWorkbook = {file, record, parsed};
+function openWorkbook({file, record, parsed, revision}) {
+  activeWorkbook = {file, record, parsed, revision};
   $('library').hidden = true;
   $('workbook').hidden = false;
   $('workbookName').textContent = (record || file).name;
@@ -266,10 +268,23 @@ function showList() {
   $('library').hidden = false;
 }
 async function openFromLink() {
-  const id = new URLSearchParams(location.hash.slice(1)).get('excel');
+  const params = new URLSearchParams(location.hash.slice(1));
+  const id = params.get('excel');
   showList();
   if (!id) return;
   let record = entries.find(x => !x.folder && x.id === id);
+  let revision;
+  const published = params.get('rev');
+  if (!record && !head && publicRawBase && /^[a-f0-9]{40}$/.test(published ?? '')) {
+    const snapshot = await fetch(publicRawBase + '/' + repo + '/' + published + '/library.json');
+    if (snapshot.ok) {
+      const catalog = readCatalog(await snapshot.json());
+      if ((catalog.metadata.revisionTime || 0) > (metadata.revisionTime || 0)) {
+        record = catalog.entries.find(x => !x.folder && x.id === id);
+        revision = published;
+      }
+    }
+  }
   if (!record && !head && publicRawBase) {
     // The public CDN can serve an older branch tip just after upload.
     try {
@@ -281,16 +296,18 @@ async function openFromLink() {
   }
   if (!record) throw new Error('공유된 엑셀 파일을 찾을 수 없습니다. 방금 게시한 파일이면 잠시 후 새로고침해 주세요.');
   try {
-    const parsed = await readWorkbook(await fetchFile(record));
-    openWorkbook({record, parsed});
+    const parsed = await readWorkbook(await fetchFile(record, revision));
+    openWorkbook({record, parsed, revision});
   } catch (error) {
     return error.message + ' 파일 목록에서 원본을 내려받을 수 있어요.';
   }
 }
-function shareAddress(id) {
+function shareAddress(id, revision = head) {
   const url = new URL(location.href);
   url.search = '';
-  url.hash = 'excel=' + encodeURIComponent(id);
+  const params = new URLSearchParams({excel: id});
+  if (revision && publicRawBase) params.set('rev', revision);
+  url.hash = params.toString();
   return url.href;
 }
 $('chooseWorkbook').onclick = () => $('localWorkbook').click();
@@ -311,13 +328,14 @@ $('shareWorkbook').onclick = () => edit(async () => {
   return '게시했습니다. 공유 링크 복사를 눌러 주소를 전달하세요.';
 }, {adding: true});
 $('copyWorkbookLink').onclick = () => {
-  const url = shareAddress(activeWorkbook.record.id);
+  const revision = new URLSearchParams(location.hash.slice(1)).get('rev') || activeWorkbook.revision || head;
+  const url = shareAddress(activeWorkbook.record.id, revision);
   navigator.clipboard.writeText(url).then(
     () => { $('status').textContent = '공유 링크를 복사했습니다.'; },
     () => prompt('공유 링크를 복사하세요.', url)
   );
 };
-$('downloadWorkbook').onclick = () => run(() => download(activeWorkbook.record));
+$('downloadWorkbook').onclick = () => run(() => download(activeWorkbook.record, activeWorkbook.revision));
 $('backToList').onclick = () => {
   if (location.hash) history.pushState(null, '', location.pathname + location.search);
   showList();
