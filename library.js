@@ -17,7 +17,7 @@ async function api(path, method = 'GET', body) {
 }
 
 async function load() {
-  const ref = await api('/git/ref/heads/' + branch);
+  const ref = await api('/git/ref/heads/' + branch + '?t=' + Date.now());
   const commit = await api('/git/commits/' + ref.object.sha);
   const root = await api('/git/trees/' + commit.tree.sha);
   const manifest = root.tree.find(x => x.path === 'library.json');
