@@ -21,7 +21,7 @@ async function api(path, method = 'GET', body) {
 
 async function load() {
   if (!token && publicRawBase && githubUrl === 'https://github.com') {
-    const response = await fetch(publicRawBase + '/' + repo + '/' + branch + '/library.json?t=' + Date.now(), {cache: 'no-store'});
+    const response = await fetch(publicRawBase + '/' + repo + '/refs/heads/' + branch + '/library.json?t=' + Date.now(), {cache: 'no-cache'});
     if (!response.ok) throw new Error('공개 목록을 열 수 없습니다 · HTTP ' + response.status);
     showCatalog(readCatalog(await response.json()), '', '');
     return;
@@ -178,7 +178,9 @@ async function rename(x) {
   const name = prompt('새 이름', x.name)?.trim();
   if (!name || name === x.name) return;
   validate(name, x.parent, entries, x.id);
-  await save(entries.map(n => n.id === x.id ? {...n, name} : n), [], 'Rename library item');
+  const updated = {...x, name};
+  if (!x.folder && isWorkbook(x.name)) updated.workbook = true;
+  await save(entries.map(n => n.id === x.id ? updated : n), [], 'Rename library item');
 }
 async function move(x) {
   const dest = $('dest');
@@ -266,7 +268,7 @@ async function openFromLink() {
   showList();
   if (!id) return;
   const record = entries.find(x => !x.folder && x.id === id);
-  if (!record) throw new Error('공유된 엑셀 파일을 찾을 수 없습니다.');
+  if (!record) throw new Error('공유된 엑셀 파일을 찾을 수 없습니다. 방금 게시한 파일이면 잠시 후 새로고침해 주세요.');
   try {
     const parsed = await readWorkbook(await fetchFile(record));
     openWorkbook({record, parsed});
