@@ -19,8 +19,8 @@ async function api(path, method = 'GET', body) {
   return data;
 }
 
-async function load() {
-  if (!token && publicRawBase && githubUrl === 'https://github.com') {
+async function load({fresh = false} = {}) {
+  if (!fresh && !token && publicRawBase && githubUrl === 'https://github.com') {
     const response = await fetch(publicRawBase + '/' + repo + '/refs/heads/' + branch + '/library.json?t=' + Date.now(), {cache: 'no-cache'});
     if (!response.ok) throw new Error('공개 목록을 열 수 없습니다 · HTTP ' + response.status);
     showCatalog(readCatalog(await response.json()), '', '');
@@ -96,13 +96,15 @@ async function authorize() {
   $('connect').textContent = '편집 연결 해제';
   return true;
 }
-function edit(fn) {
+function edit(fn, {adding = false} = {}) {
   return run(async () => {
     if (!(await authorize())) return;
     if (!head) {
       const displayed = JSON.stringify(entries);
+      const target = current;
       await load();
-      if (JSON.stringify(entries) !== displayed) return '목록이 변경되어 갱신했습니다. 항목을 다시 선택하세요.';
+      if (target !== current || (!adding && JSON.stringify(entries) !== displayed))
+        return '목록이 변경되어 갱신했습니다. 항목을 다시 선택하세요.';
     }
     return fn();
   });
@@ -267,7 +269,16 @@ async function openFromLink() {
   const id = new URLSearchParams(location.hash.slice(1)).get('excel');
   showList();
   if (!id) return;
-  const record = entries.find(x => !x.folder && x.id === id);
+  let record = entries.find(x => !x.folder && x.id === id);
+  if (!record && !head && publicRawBase) {
+    // The public CDN can serve an older branch tip just after upload.
+    try {
+      await load({fresh: true});
+      record = entries.find(x => !x.folder && x.id === id);
+    } catch {
+      // Guests can still use the cached catalog if the API rate limit is reached.
+    }
+  }
   if (!record) throw new Error('공유된 엑셀 파일을 찾을 수 없습니다. 방금 게시한 파일이면 잠시 후 새로고침해 주세요.');
   try {
     const parsed = await readWorkbook(await fetchFile(record));
@@ -298,7 +309,7 @@ $('shareWorkbook').onclick = () => edit(async () => {
   history.pushState(null, '', shareAddress(record.id));
   openWorkbook({record, parsed});
   return '게시했습니다. 공유 링크 복사를 눌러 주소를 전달하세요.';
-});
+}, {adding: true});
 $('copyWorkbookLink').onclick = () => {
   const url = shareAddress(activeWorkbook.record.id);
   navigator.clipboard.writeText(url).then(
@@ -340,7 +351,7 @@ $('files').onchange = () => {
       }
     }
     return added.length + '개 파일을 올렸습니다.';
-  });
+  }, {adding: true});
 };
 $('repoName').textContent = repo;
 $('tokenLink').href = githubUrl + '/settings/personal-access-tokens/new';
