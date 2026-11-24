@@ -1,5 +1,5 @@
-import {repository as repo, githubUrl, apiUrl, dataBranch as branch} from './config.js?v=2';
-import {readCatalog, writeCatalog} from './catalog.mjs?v=2';
+import {repository as repo, githubUrl, apiUrl, dataBranch as branch, publicRawBase} from './config.js?v=3';
+import {readCatalog, writeCatalog} from './catalog.mjs?v=3';
 const limit = 25 * 1024 * 1024;
 const $ = id => document.getElementById(id);
 let token = '', head = '', tree = '', current = '', entries = [], busy = false;
@@ -18,6 +18,12 @@ async function api(path, method = 'GET', body) {
 }
 
 async function load() {
+  if (!token && publicRawBase && githubUrl === 'https://github.com') {
+    const response = await fetch(publicRawBase + '/' + repo + '/' + branch + '/library.json?t=' + Date.now(), {cache: 'no-store'});
+    if (!response.ok) throw new Error('공개 목록을 열 수 없습니다 · HTTP ' + response.status);
+    showCatalog(readCatalog(await response.json()), '', '');
+    return;
+  }
   const ref = await api('/git/ref/heads/' + branch + '?t=' + Date.now());
   const commit = await api('/git/commits/' + ref.object.sha);
   const root = await api('/git/trees/' + commit.tree.sha);
@@ -26,8 +32,11 @@ async function load() {
   const blob = await api('/git/blobs/' + manifest.sha);
   const bytes = Uint8Array.from(atob(blob.content), c => c.charCodeAt(0));
   const catalog = readCatalog(JSON.parse(new TextDecoder().decode(bytes)));
-  head = commit.sha;
-  tree = commit.tree.sha;
+  showCatalog(catalog, commit.sha, commit.tree.sha);
+}
+function showCatalog(catalog, commitSha, treeSha) {
+  head = commitSha;
+  tree = treeSha;
   entries = catalog.entries;
   metadata = catalog.metadata;
   legacy = catalog.legacy;
@@ -88,7 +97,11 @@ async function authorize() {
 function edit(fn) {
   return run(async () => {
     if (!(await authorize())) return;
-    if (!head) await load();
+    if (!head) {
+      const displayed = JSON.stringify(entries);
+      await load();
+      if (JSON.stringify(entries) !== displayed) return '목록이 변경되어 갱신했습니다. 항목을 다시 선택하세요.';
+    }
     return fn();
   });
 }
@@ -205,7 +218,10 @@ async function upload(files) {
 async function download(x) {
   const headers = {Accept: 'application/vnd.github.raw+json'};
   if (token) headers.Authorization = 'Bearer ' + token;
-  const response = await fetch(apiUrl + '/repos/' + repo + '/contents/files/' + encodeURIComponent(x.id) + '?ref=' + head, {headers});
+  const path = '/files/' + encodeURIComponent(x.id);
+  const response = !token && publicRawBase && githubUrl === 'https://github.com'
+    ? await fetch(publicRawBase + '/' + repo + '/' + (head || branch) + path)
+    : await fetch(apiUrl + '/repos/' + repo + '/contents' + path + '?ref=' + (head || branch), {headers});
   if (!response.ok) throw new Error('다운로드 실패 · HTTP ' + response.status);
   const blob = await response.blob();
   if (blob.size !== x.size) throw new Error('받은 파일의 크기가 일치하지 않습니다.');
