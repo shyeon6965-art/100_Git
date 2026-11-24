@@ -24,13 +24,19 @@ nav button[aria-current]{background:#fff;font-weight:700;position:relative;top:1
 .sheet small{display:block;margin:-10px 0 10px;font-size:13px;color:#5c677d}
 .table-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px}
 .table-tools input{font:inherit;padding:4px 7px;border:1px solid #8a93a0;border-radius:4px}
+.freeze-controls label{padding:3px 5px;border:1px solid transparent;border-radius:5px}
 .freeze-controls input{width:5em}
+.freeze-controls .freeze-active{border-color:#87add6;background:#e7f1ff;color:#174c80;font-weight:700}
 .table-scroll{max-height:65vh;overflow:auto;background:#fff;border:1px solid #c5ced8;isolation:isolate}
 .table-scroll table{margin:0}
 .table-scroll .frozen-row,.table-scroll .frozen-column{position:sticky;background-color:#fff}
 .table-scroll .frozen-row{top:var(--frozen-top);z-index:2}
 .table-scroll .frozen-column{left:var(--frozen-left);z-index:1}
 .table-scroll .frozen-row.frozen-column{z-index:3}
+.table-scroll :is(.frozen-row,.frozen-column)::after{content:"";position:absolute;inset:0;pointer-events:none;background:rgba(40,112,189,.14)}
+.table-scroll .frozen-row.frozen-column::after{background:rgba(40,112,189,.21)}
+.table-scroll .frozen-row-edge::after{border-bottom:2px solid #1965aa}
+.table-scroll .frozen-column-edge::after{border-right:2px solid #1965aa}
 .table-scroll .search-match{box-shadow:inset 0 0 0 2px #d09817}
 .table-scroll .active-match{box-shadow:inset 0 0 0 3px #1965aa}
 </style></head><body><header><b>엑셀 표 공유</b></header>
@@ -386,24 +392,30 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
       positions ??= tablePositions(table);
       rowInput.max = positions.rows.length;
       colInput.max = positions.columns;
-      for (const cell of frozen) cell.classList.remove('frozen-row', 'frozen-column');
+      for (const cell of frozen) {
+        cell.classList.remove('frozen-row', 'frozen-column', 'frozen-row-edge', 'frozen-column-edge');
+      }
       frozen = [];
       const rows = count(rowInput, positions.rows.length);
       const columns = count(colInput, positions.columns);
+      rowInput.closest('label').classList.toggle('freeze-active', rows > 0);
+      colInput.closest('label').classList.toggle('freeze-active', columns > 0);
       if (rows || columns) {
         const tableTop = table.getBoundingClientRect().top;
         const firstRow = positions.rows[0]?.getBoundingClientRect().top ?? tableTop;
         const tops = rows ? positions.rows.map(row => row.getBoundingClientRect().top - firstRow) : [];
         const lefts = columns ? columnOffsets(table, positions) : [];
-        for (const {cell, row, column} of positions.cells) {
+        for (const {cell, row, column, width} of positions.cells) {
           if (row >= rows && column >= columns) continue;
           if (row < rows) {
             cell.style.setProperty('--frozen-top', tops[row] + 'px');
             cell.classList.add('frozen-row');
+            if (row + cell.rowSpan >= rows) cell.classList.add('frozen-row-edge');
           }
           if (column < columns) {
             cell.style.setProperty('--frozen-left', lefts[column] + 'px');
             cell.classList.add('frozen-column');
+            if (column + width >= columns) cell.classList.add('frozen-column-edge');
           }
           frozen.push(cell);
         }
