@@ -2,55 +2,11 @@
 <html lang="ko">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
 <title>엑셀 표 공유</title>
-<meta name="library-release" content="7">
-<link rel="stylesheet" href="./library.css?v=4">
-<header><strong>엑셀 표 공유</strong><button id="connect">편집 연결</button></header>
+<link rel="stylesheet" href="./viewer.css">
 <main>
-  <p role="status" id="status">불러오는 중…</p>
-  <section id="workbook" hidden aria-labelledby="workbookName">
-    <button id="backToList">← 파일 목록</button>
-    <h1 id="workbookName"></h1>
-    <div class="toolbar">
-      <button id="shareWorkbook" class="primary">게시하고 공유 링크 만들기</button>
-      <button id="copyWorkbookLink" class="primary">공유 링크 복사</button>
-      <button id="downloadWorkbook">원본 내려받기</button>
-    </div>
-    <p id="workbookHint" class="hint" hidden>공개 테스트 페이지에 게시하면 링크를 받은 사람이 표와 원본 파일을 볼 수 있어요.</p>
-    <div id="sheetButtons" class="toolbar sheets" aria-label="시트 선택"></div>
-    <div id="sheetGrid" class="sheet-grid" tabindex="0" role="region" aria-label="엑셀 표"></div>
-    <div id="sheetNavigation" class="toolbar sheet-navigation" hidden>
-      <button id="previousRows">이전 행</button><button id="nextRows">다음 행</button>
-      <button id="previousColumns">이전 열</button><button id="nextColumns">다음 열</button>
-      <span id="sheetPosition"></span>
-    </div>
-  </section>
-  <section id="library">
-  <h1>엑셀 표를 링크로 공유</h1>
-  <button id="chooseWorkbook" class="primary">엑셀 파일 선택</button>
-  <input hidden id="localWorkbook" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
-  <nav id="crumbs" aria-label="현재 위치"></nav>
-  <h2 id="title">전체 자료</h2>
-  <section class="toolbar" aria-label="자료 관리">
-    <input id="search" type="search" placeholder="전체 자료 검색" aria-label="전체 자료 검색">
-    <button id="refresh">새로고침</button><button id="folder">하위 탭 추가</button>
-    <button id="upload" class="primary">파일 올리기</button><input hidden type="file" id="files" multiple>
-  </section>
-  <section id="list" aria-label="탭과 파일"></section>
-  <button hidden id="migrate">기존 자료 형식 업데이트</button>
-  <p class="hint">파일당 최대 25 MiB · 나스카 보호 문서는 내려받은 뒤 권한이 있는 PC에서 여세요.</p>
-  </section>
+  <h1>엑셀 표 공유</h1>
+  <p>게시한 사람에게 받은 링크를 열면 엑셀 시트의 표를 바로 볼 수 있습니다.</p>
+  <p>새 표는 PC의 <strong>엑셀 표 게시</strong> 도구에서 게시할 수 있습니다.</p>
 </main>
-<dialog id="access"><form method="dialog">
-  <h2>GitHub 편집 연결</h2>
-  <p>이 저장소에 쓰기 권한이 있는 계정의 토큰을 입력하세요. 토큰은 현재 페이지의 메모리에만 보관합니다.</p>
-  <p><a id="tokenLink" target="_blank" rel="noreferrer">토큰 만들기</a>에서 저장소 <b id="repoName"></b>의 Contents 읽기·쓰기 권한을 설정하세요.</p>
-  <label>GitHub 토큰 <input id="token" type="password" autocomplete="off" spellcheck="false"></label>
-  <footer><button value="cancel" type="button" id="cancel">취소</button><button value="ok" class="primary">연결</button></footer>
-</form></dialog>
-<dialog id="moveDialog"><form method="dialog"><h2>이동할 탭</h2><select id="dest" aria-label="대상 탭"></select>
-  <footer><button value="cancel">취소</button><button value="ok" class="primary">이동</button></footer>
-</form></dialog>
-<script type="module" src="./library.js?v=7"></script>
 </html>
