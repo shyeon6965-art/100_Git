@@ -1,6 +1,6 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Table</title><meta name="report-version" content="ee0a5becc792e20cef08568bb85125752cfb7112bbe8857f381eb83a02289326"><style>
+<title>Table</title><meta name="report-version" content="219dcd525a2347566f5cf10c49c923b1ed111c06809677f40de6ea6e9d882c3e"><style>
 *{box-sizing:border-box} body{margin:0;font-family:'Malgun Gothic','Segoe UI',sans-serif;font-size:14px;color:#1e293b;background:#f5f7fa}
 header{padding:10px 16px;background:#26303d;color:#fff} header b{font-size:16px} header span{color:#b9c4d2;margin-left:12px;font-size:12px}
 nav{display:flex;gap:2px;padding:8px 16px 0;background:#e6ebf1;border-bottom:1px solid #c5ced8;flex-wrap:wrap}
@@ -50,6 +50,13 @@ nav .tab-empty{margin-left:6px;font-size:12px;font-weight:400;color:#5c677d}
 .freeze-controls .freeze-active{border-color:#87add6;background:#e7f1ff;color:#174c80;font-weight:700}
 .table-scroll{max-height:65vh;overflow:auto;background:#fff;border:1px solid #c5ced8;isolation:isolate}
 .table-scroll table{margin:0}
+.slides{padding:10px 14px}
+.table-scroll:has(.slides){max-height:none}
+.slides figure{margin:0 auto 16px;max-width:1100px}
+.slides figcaption{padding:4px 0;color:#536783;font-weight:600}
+.slides img{display:block;width:100%;height:auto;border:1px solid #dce3ed}
+.plain-text{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:8px 14px 14px;font-family:Consolas,"Courier New",monospace}
+.text-download{margin:0;padding:10px 14px 0}
 .table-scroll .frozen-row,.table-scroll .frozen-column{position:sticky;background-color:#fff}
 .table-scroll .frozen-row{top:var(--frozen-top);z-index:2}
 .table-scroll .frozen-column{left:var(--frozen-left);z-index:1}
@@ -531,7 +538,7 @@ SOFTWARE.</script><script>!function(f){typeof module!='undefined'&&typeof export
     tablePositions,
     activate(activeSection) {
       section = activeSection;
-      searchTools.hidden = !section;
+      searchTools.hidden = !section?.querySelector('.table-scroll table');
       search();
       searchTimer = undefined;
       for (const grid of section?.querySelectorAll('.table-scroll') || []) {
@@ -603,7 +610,11 @@ SOFTWARE.</script><script>!function(f){typeof module!='undefined'&&typeof export
       const snapshot = await readHistory(earlierPath);
       if (token !== comparisons.get(sheet)) return;
       const earlier = new DOMParser().parseFromString(snapshot.html, 'text/html').querySelector('table');
-      const old = new Map((earlier ? tableControls.tablePositions(earlier).cells : [])
+      if (!earlier) {
+        status.textContent = '';
+        return;
+      }
+      const old = new Map(tableControls.tablePositions(earlier).cells
         .map(({cell, row, column}) => [row + ':' + column, cell.textContent.trim()]));
       let changed = 0;
       for (const {cell, row, column} of tableControls.tablePositions(table).cells) {
@@ -674,6 +685,7 @@ SOFTWARE.</script><script>!function(f){typeof module!='undefined'&&typeof export
       }
       const section = sheet.closest('section');
       if (!section.hidden) tableControls.activate(section);
+      updateExportControls();
       comparePrevious(sheet);
       status.textContent = path ? '이전 버전을 보고 있습니다.' : '';
     } catch {
@@ -967,7 +979,7 @@ function showTabs(requestedPath) {
   (toolbar?.querySelector('.table-options') || standaloneTools).prepend(searchTools);
   tableControls.activate(section);
   historyView.activate(section);
-  groupSave.hidden = !active || !tabsByParent.get(active.parent).some(node => node.hasSheets);
+  updateExportControls();
   empty.hidden = Boolean(section);
   emptyTabName.hidden = !active;
   emptyTabName.textContent = active ? requestedPath.slice(0, level).map(id => tabsById.get(id).name).join(' / ') : '';
@@ -1043,6 +1055,7 @@ function buildWorkbook(sheets) {
 }
 
 function currentGroup() {
+  if (!focusedTab) return {sheets: [], title: document.title};
   const path = [];
   for (let parent = tabsById.get(focusedTab.parent); parent; parent = tabsById.get(parent.parent)) {
     path.unshift(parent.name);
@@ -1051,13 +1064,25 @@ function currentGroup() {
   for (const tab of tabsByParent.get(focusedTab.parent)) {
     const section = sections.get(tab.id);
     if (!section) continue;
-    const items = section.querySelectorAll('.sheet');
+    const items = Array.from(section.querySelectorAll('.sheet')).filter(containsTable);
     for (const element of items) {
       const title = items.length === 1 ? tab.name : tab.name + '_' + element.querySelector('h2').textContent;
       sheets.push({element, title});
     }
   }
   return {sheets, title: path.join('_') || document.title};
+}
+
+function containsTable(sheet) {
+  return Boolean(sheet.querySelector('.table-scroll table'));
+}
+
+function updateExportControls() {
+  const section = focusedTab && sections.get(focusedTab.id);
+  for (const sheet of section?.querySelectorAll('.sheet') || []) {
+    sheet.querySelector('[data-save="sheet"]').hidden = !containsTable(sheet);
+  }
+  groupSave.hidden = !currentGroup().sheets.length;
 }
 
 function setSaveProgress(message) {
