@@ -504,12 +504,13 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
 
   function show(index) {
     const image = images[index];
-    picture.src = image.src;
+    const source = image.dataset.src;
+    picture.src = source;
     picture.alt = image.alt;
     title.textContent = image.alt;
-    download.href = image.src;
+    download.href = source;
     const name = image.alt.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150) || 'waveform';
-    download.download = name + (image.src.startsWith('data:image/jpeg;') ? '.jpg' : '.png');
+    download.download = name + (source.endsWith('.jpg') ? '.jpg' : '.png');
     choices.forEach((button, i) => {
       button.hidden = images.length < 2;
       button.setAttribute('aria-pressed', String(index === i));
